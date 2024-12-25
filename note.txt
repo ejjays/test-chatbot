@@ -1,0 +1,159 @@
+/*
+ * Created by David Adams
+ * https://codeshack.io/build-ai-powered-chatbot-openai-chatgpt-javascript/
+ * 
+ * Released under the MIT license
+ */
+'use strict';
+class ChatAI {
+
+    constructor(options) {
+        let defaults = {
+            api_key: '',
+            source: 'gemini', // Changed source to Gemini
+            model: 'gemini-base-model', // Set to your chosen Gemini model
+            conversations: [],
+            selected_conversation: null,
+            container: '.chat-ai',
+            chat_speed: 30,
+            title: 'Untitled',
+            max_tokens: 100,
+            version: '1.0.0',
+            show_tokens: true,
+            available_models: ['gemini-base-model', 'gemini-advanced-model'] // Update with actual Gemini models
+        };
+        this.options = Object.assign(defaults, options);
+        this.options.container = document.querySelector(this.options.container);
+        this.options.container.innerHTML = `
+            ${this._sidebarTemplate()}
+            <main class="content">               
+                ${this._welcomePageTemplate()}
+                <form class="message-form">
+                    <input type="text" placeholder="Type a message..." required>
+                    <button type="submit"><i class="fa-solid fa-paper-plane"></i></button>
+                </form>
+            </main>
+        `;
+        let settings = this.getSettings();
+        if (settings) {
+            this.options = Object.assign(this.options, settings);
+        }
+        this._eventHandlers();
+        this.container.querySelector('.message-form input').focus();
+    }
+
+    getMessage() {
+        this.container.querySelector('.content .messages').scrollTop = this.container.querySelector('.content .messages').scrollHeight;
+        let messages = [{role: 'system', content: 'You are a helpful assistant.'}, ...this.selectedConversation.messages].map(message => { 
+            return { role: message.role, content: message.content } 
+        });
+        fetch('https://api.gemini.com/v1/chat/completions', { // Update to Gemini's API endpoint
+            cache: 'no-cache',
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + this.APIKey,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                'model': this.model,
+                'messages': messages,
+                'max_tokens': this.maxTokens
+            })
+        }).then(response => response.json()).then(data => {
+            if (data.error) {
+                this.showErrorMessage(data.error.message);
+                return;
+            }
+            this.container.querySelector('.message.assistant.active .blink').remove();
+            let msg = data.choices[0].message.content;
+            let msgElement = this.container.querySelector('.message.assistant.active .text');
+            let textInterval = setInterval(() => {
+                if (msg[0]) {
+                    msgElement.innerHTML += msg[0];
+                    msgElement.innerHTML = msgElement.innerHTML.replace(/(?:\r\n|\r|\n)/g, '<br>');
+                    msg = msg.substring(1);
+                } else {
+                    clearInterval(textInterval);
+                    msgElement.innerHTML = msgElement.innerHTML.replace(/```(.*?)```/, "<pre><code>$1" + "<" + "/code>" + "<" + "/pre>");
+                    if (this.options.show_tokens) {
+                        msgElement.innerHTML += '<div><span class="tokens">' + data.usage.total_tokens + ' Tokens</span></div>';
+                    }
+                    this.container.querySelector('.message-form input').disabled = false;
+                    this.container.querySelector('.message.assistant.active').classList.remove('active');
+                    this.selectedConversation.messages.push({
+                        role: 'assistant',
+                        content: data.choices[0].message.content,
+                        date: new Date(),
+                        total_tokens: data.usage.total_tokens,
+                        prompt_tokens: data.usage.prompt_tokens,
+                        completion_tokens: data.usage.completion_tokens
+                    });
+                }
+                this.container.querySelector('.content .messages').scrollTop = this.container.querySelector('.content .messages').scrollHeight;
+            }, this.options.chat_speed);
+        });
+    }
+
+    // ... [rest of your code remains unchanged]
+
+    openSettingsModal() {
+        let self = this;
+        return this.modal({
+            state: 'open',
+            modalTemplate: function () {
+                return `
+                <div class="chat-ai-modal">
+                    <div class="content">
+                        <h3 class="heading">Settings<span class="modal-close">&times;</span></h3>
+                        <div class="body">
+                            <form class="settings-form" action="">
+                                <label for="api_key">API Key</label>
+                                <input type="text" name="api_key" id="api_key" value="${self.APIKey}">
+                                <label for="source">Source</label>
+                                <select name="source" id="source">
+                                    <option value="gemini" selected>Gemini</option> <!-- Changed to Gemini -->
+                                </select>
+                                <label for="model">Model</label>
+                                <select name="model" id="model">
+                                    ${self.options.available_models.map(m => `<option value="${m}"${self.model==m?' selected':''}>${m}</option>`).join('')}
+                                </select>
+                                <label for="max_tokens">Max Tokens</label>
+                                <input type="number" name="max_tokens" id="max_tokens" value="${self.maxTokens}">
+                                <div class="msg"></div>
+                            </form>
+                        </div>
+                        <div class="footer">
+                            <a href="#" class="btn modal-close save">Save</a>
+                            <a href="#" class="btn modal-close reset right alt">Reset</a>
+                        </div>
+                    </div>
+                </div>
+                `;
+            },
+            onClose: function (event) {
+                if (event && event.button) {
+                    if (event.button.classList.contains('save')) {
+                        self.APIKey = event.source.querySelector('#api_key').value;
+                        self.maxTokens = event.source.querySelector('#max_tokens').value;
+                        self.source = event.source.querySelector('#source').value;
+                        self.model = event.source.querySelector('#model').value;
+                        self.saveSettings();
+                    }
+                    if (event.button.classList.contains('reset')) {
+                        localStorage.removeItem('settings');
+                        location.reload();
+                    }
+                }
+            }
+        });
+    }
+
+    // ... [rest of your code remains unchanged]
+
+}
+
+// Usage
+const chatAI = new ChatAI({
+    api_key: 'YOUR_API_KEY_HERE', // Replace with your actual API key
+    container: '.chat-ai'
+});
