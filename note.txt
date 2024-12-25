@@ -1,3 +1,5 @@
+https://codeshack.io/build-ai-powered-chatbot-openai-chatgpt-javascript/
+
 /*
  * Created by David Adams
  * https://codeshack.io/build-ai-powered-chatbot-openai-chatgpt-javascript/
